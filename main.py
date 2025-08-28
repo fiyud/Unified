@@ -10,10 +10,14 @@ import numpy as np
 import torch
 import argparse
 from src.envs import construct_envs
-from src.agent.unigoal.agent import UniGoal_Agent
+# from src.agent.unigoal.agent import UniGoal_Agent
+from src.agent.unigoal.enhanced_agent import EnhancedUniGoalAgent as UniGoal_Agent
+
 from src.map.bev_mapping import BEV_Map
 from src.graph.graph import Graph
 import gzip
+import time
+import datetime
 
 def get_config():
 
@@ -53,6 +57,18 @@ def get_config():
 
     return args
 
+from src.utils.time import TrainingTimeTracker
+def setup_timing_tracker(args):
+    timing_save_path = os.path.join(args.dump_location, args.experiment_id, "timing_data.json")
+    timer = TrainingTimeTracker(save_path=timing_save_path)
+    
+    timer.start_training()
+    timer.set_total_episodes(args.num_eval_episodes)
+    
+    print(f"Starting evaluation of {args.num_eval_episodes} episodes")
+    print(f"Timing data will be saved to: {timing_save_path}")
+    
+    return timer
 
 def main():
     args = get_config()
@@ -76,6 +92,10 @@ def main():
     if args.goal_type == 'text':
         with gzip.open(args.text_goal_dataset, 'rt') as f:
             text_goal_dataset = json.load(f)
+    elif args.goal_type == 'object':
+        args.task_config = "tasks/objectnav_hm3d.yaml"  # Giữ nguyên vì construct_envs sẽ thêm "configs/" vào trước
+        # Cập nhật để trỏ đúng đến file chỉ mục val.json.gz  
+        args.objectnav_dataset = "data/datasets/objectnav/hm3d/v2/objectnav_hm3d_v2_locobot_multifloor/val/val.json.gz"
 
     BEV_map = BEV_Map(args)
     graph = Graph(args)
@@ -117,8 +137,13 @@ def main():
         graph.set_image_goal(infos['instance_imagegoal'])
     elif args.goal_type == 'text':
         graph.set_text_goal(infos['text_goal'])
+    elif args.goal_type == 'object':
+        graph.set_text_goal(infos['goal_name'])
 
+    timer = setup_timing_tracker(args)
+    
     step = 0
+    episode_count = 0
 
     while True:
         if finished == True:
@@ -128,13 +153,17 @@ def main():
         local_step = step % args.num_local_steps
 
         if done:
+            timer.end_episode(episode_count + 1, log_interval=args.log_interval)
+            
             spl = infos['spl']
             success = infos['success']
             success = success if success is not None else 0.0
             eval_metrics_id += 1
             episode_success.append(success)
             episode_spl.append(spl)
-            if len(episode_success) == args.num_episodes:
+            episode_count += 1
+            
+            if len(episode_success) == args.num_eval_episodes:
                 finished = True
             if args.visualize:
                 video_path = os.path.join(args.visualization_dir, 'videos', 'eps_{:0>6}.mp4'.format(infos['episode_no']))
@@ -149,6 +178,11 @@ def main():
                 graph.set_image_goal(infos['instance_imagegoal'])
             elif args.goal_type == 'text':
                 graph.set_text_goal(infos['text_goal'])
+            elif args.goal_type == 'object':
+                graph.set_text_goal(infos['goal_name'])
+                
+            if not finished:
+                timer.start_episode(episode_count + 1)
 
         BEV_map.mapping(rgbd, infos)
 
@@ -216,10 +250,13 @@ def main():
 
         # ------------------------------------------------------------------
         # log
+
         if step % args.log_interval == 0:
+            current_time = timer.get_current_total_time()
             log = " ".join([
                 "num timesteps {},".format(step),
                 "episode_id {}".format(infos['episode_no']),
+                "elapsed_time: {},".format(timer.format_time(current_time))
             ])
 
             total_success = []
@@ -234,11 +271,23 @@ def main():
                 log += " {:.5f}/{:.5f},".format(
                     np.mean(total_success),
                     np.mean(total_spl))
+                
+                avg_episode_time = timer.get_average_episode_time()
+                if avg_episode_time > 0:
+                    log += " Avg episode time: {},".format(timer.format_time(avg_episode_time))
+                    
+                    remaining_episodes = args.num_eval_episodes - len(episode_success)
+                    if remaining_episodes > 0:
+                        estimated_remaining = remaining_episodes * avg_episode_time
+                        log += " Est. remaining: {}".format(timer.format_time(estimated_remaining))
 
             print(log)
             logging.info(log)
         # ------------------------------------------------------------------
         step += 1
+    
+    timer.end_training()
+    timer.print_summary()
 
     total_success = []
     total_spl = []
@@ -248,20 +297,33 @@ def main():
         total_spl.append(spl)
 
     if len(total_spl) > 0:
-        log = "Average SR/SPL:"
-        log += " {:.5f}/{:.5f},".format(
+        log = "Final Average SR/SPL:"
+        log += " {:.5f}/{:.5f}".format(
             np.mean(total_success),
             np.mean(total_spl))
-
-    print(log)
-    logging.info(log)
+        print(log)
+        logging.info(log)
         
     total = {'succ': total_success, 'spl': total_spl}
 
-    with open('{}/total.json'.format(
-            args.log_dir), 'w') as f:
-        json.dump(total, f)
+    results = {
+        'success_rates': total_success, 
+        'spl_scores': total_spl,
+        'timing_summary': timer.get_timing_summary(),
+        'total_episodes': len(episode_success),
+        'total_time_formatted': timer.format_time(timer.get_current_total_time()),
+        'average_episode_time': timer.get_average_episode_time(),
+        'experiment_id': args.experiment_id,
+        'completed_at': datetime.datetime.now().isoformat()
+    }
 
+    with open('{}/total.json'.format(args.log_dir), 'w') as f:
+        json.dump({'succ': total_success, 'spl': total_spl}, f)
+        
+    with open('{}/enhanced_results.json'.format(args.log_dir), 'w') as f:
+        json.dump(results, f, indent=2)
+
+    print(f"Enhanced results saved to: {args.log_dir}/enhanced_results.json")
 
 if __name__ == "__main__":
     main()
