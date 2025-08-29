@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import argparse
 from src.envs import construct_envs
-from src.agent.unigoal.agent import UniGoal_Agent
+from src.agent.unigoal.enhanced_agent import EnhancedUniGoalAgent as UniGoal_Agent
 from src.map.bev_mapping import BEV_Map
 from src.graph.graph import Graph
 import gzip
@@ -26,7 +26,6 @@ def get_config():
     parser.add_argument("--goal", default="", type=str)
     parser.add_argument("--real_world", action="store_true")
     
-    # Resume functionality arguments
     parser.add_argument("--start_episode", default=0, type=int, 
                        help="Episode to start from (for resuming evaluation)")
     parser.add_argument("--resume_metrics", nargs=2, type=float, default=[0.0, 0.0],
