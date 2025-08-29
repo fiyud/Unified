@@ -19,6 +19,8 @@ import gzip
 import time
 import datetime
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 def get_config():
 
     parser = argparse.ArgumentParser()
