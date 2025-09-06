@@ -10,3 +10,4 @@ grakel
 open3d
 moviepy
 supervision==0.21.0
+gudhi

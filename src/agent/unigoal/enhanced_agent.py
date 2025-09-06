@@ -8,17 +8,8 @@ import networkx as nx
 import sys
 import os
 
-from src.graph.enhanced_graph_navigation import (
-    EnhancedGraphNavigationSystem,
-    TemporalGraphMemory,
-    CounterfactualGraphReasoner,
-    HierarchicalTopologicalGraph,
-    ProbabilisticGraphMatcher,
-    TrainingFreeGraphOperator,
-    HierarchicalLevel
-)
+from src.graph.temporal import TemporalGraphMemory
 from src.graph.topological_loop_closure import TopologicalLoopDetector
-
 
 class EnhancedUniGoalAgent:
     def __init__(self, args, envs):
@@ -38,12 +29,7 @@ class EnhancedUniGoalAgent:
         )
         
         self.temporal_memory = TemporalGraphMemory()
-        self.counterfactual_reasoner = CounterfactualGraphReasoner()
-        self.hierarchical_graph = HierarchicalTopologicalGraph()
-        self.probabilistic_matcher = ProbabilisticGraphMatcher()
-        self.graph_operator = TrainingFreeGraphOperator()
-        
-        # Enhanced tracking
+
         self.trajectory_history = []
         self.near_goal_trajectory = []
         self.loop_check_counter = 0
