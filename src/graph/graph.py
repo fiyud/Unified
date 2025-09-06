@@ -41,7 +41,6 @@ from segment_anything import sam_model_registry, SamPredictor
 from lightglue import LightGlue, DISK
 from lightglue.utils import match_pair , numpy_image_to_torch
 
-
 ADDITIONAL_PSL_OPTIONS = {
     'log4j.threshold': 'INFO'
 }
@@ -49,7 +48,6 @@ ADDITIONAL_PSL_OPTIONS = {
 ADDITIONAL_CLI_OPTIONS = [
     # '--postgres'
 ]
-
 
 class RoomNode():
     def __init__(self, caption):
