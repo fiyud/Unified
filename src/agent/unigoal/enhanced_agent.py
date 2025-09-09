@@ -36,7 +36,7 @@ class EnhancedUniGoalAgent:
         self.counterfactual_targets = []
         self.stuck_detection_counter = 0
         
-        print("[Enhanced Agent] Initialized with all 6 improvements")
+        print("[Enhanced Agent] Initialized with all improvements")
     
     def reset(self):
         obs, rgbd, infos = self.base_agent.reset()

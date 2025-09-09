@@ -1,3 +1,5 @@
+# INFO:root:num timesteps 3670, episode_id 196 elapsed_time: 1h 36m 33.7s, Progress: 36.6% (366/1000), Average SR/SPL: 0.27049/0.13304, Avg episode time: 1m 53.1s, Est. remaining: 19h 54m 48.8s
+
 import numpy as np
 import cv2
 from scipy.spatial.distance import cdist, pdist, squareform
@@ -119,20 +121,20 @@ class TopologicalLoopDetector:
                     edges.append((i, j, distances[i, j]))
         
         # Build triangle list (2-simplices)
-        triangles = []
-        for i in range(n_points):
-            for j in range(i + 1, n_points):
-                for k in range(j + 1, n_points):
-                    if (distances[i, j] <= self.max_edge_length and
-                        distances[j, k] <= self.max_edge_length and
-                        distances[i, k] <= self.max_edge_length):
-                        max_edge = max(distances[i, j], distances[j, k], distances[i, k])
-                        triangles.append((i, j, k, max_edge))
+        # triangles = []
+        # for i in range(n_points):
+        #     for j in range(i + 1, n_points):
+        #         for k in range(j + 1, n_points):
+        #             if (distances[i, j] <= self.max_edge_length and
+        #                 distances[j, k] <= self.max_edge_length and
+        #                 distances[i, k] <= self.max_edge_length):
+        #                 max_edge = max(distances[i, j], distances[j, k], distances[i, k])
+        #                 triangles.append((i, j, k, max_edge))
         
         return {
             'vertices': list(range(n_points)),
             'edges': edges,
-            'triangles': triangles,
+            # 'triangles': triangles,
             'distances': distances
         }
     

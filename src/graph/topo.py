@@ -4,20 +4,11 @@ Topological Signatures for Loop Closure (TSLC)
 
 import numpy as np
 import cv2
-from scipy.spatial.distance import cdist, pdist, squareform
-from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import shortest_path
 from typing import List, Tuple, Dict, Optional, Any
-import warnings
 from dataclasses import dataclass
 from collections import defaultdict
 
-try:
-    import gudhi
-    GUDHI_AVAILABLE = True
-except ImportError:
-    GUDHI_AVAILABLE = False
-    warnings.warn("GUDHI not installed. Using simplified persistence computation.")
+import gudhi
 
 @dataclass
 class PersistencePoint:
@@ -80,7 +71,7 @@ class TopologicalLoopDetector:
             points.append([x, y, z])
         return np.array(points)
     
-    def build_vietoris_rips_complex(self, points: np.ndarray) -> 'SimplicalComplex':
+    def build_vietoris_rips_complex(self, points: np.ndarray):
         """
         Build Vietoris-Rips complex from point cloud.
         
@@ -90,55 +81,14 @@ class TopologicalLoopDetector:
         Returns:
             Simplicial complex for persistence computation
         """
-        if GUDHI_AVAILABLE:
-            # Use GUDHI for efficient computation
-            rips_complex = gudhi.RipsComplex(
-                points=points,
-                max_edge_length=self.max_edge_length
-            )
-            simplex_tree = rips_complex.create_simplex_tree(max_dimension=2)
-            return simplex_tree
-        else:
-            # Simplified implementation without GUDHI
-            return self._build_simple_complex(points)
+        rips_complex = gudhi.RipsComplex(
+            points=points,
+            max_edge_length=self.max_edge_length
+        )
+        simplex_tree = rips_complex.create_simplex_tree(max_dimension=2)
+        return simplex_tree
     
-    def _build_simple_complex(self, points: np.ndarray) -> Dict:
-        """
-        Simplified complex construction when GUDHI is not available.
-        
-        Args:
-            points: Nx3 array of points
-            
-        Returns:
-            Dictionary representing simplicial complex
-        """
-        n_points = len(points)
-        distances = squareform(pdist(points))
-        
-        # Build edge list (1-simplices)
-        edges = []
-        for i in range(n_points):
-            for j in range(i + 1, n_points):
-                if distances[i, j] <= self.max_edge_length:
-                    edges.append((i, j, distances[i, j]))
-        
-        # Build triangle list (2-simplices)
-        triangles = []
-        for i in range(n_points):
-            for j in range(i + 1, n_points):
-                for k in range(j + 1, n_points):
-                    if (distances[i, j] <= self.max_edge_length and
-                        distances[j, k] <= self.max_edge_length and
-                        distances[i, k] <= self.max_edge_length):
-                        max_edge = max(distances[i, j], distances[j, k], distances[i, k])
-                        triangles.append((i, j, k, max_edge))
-        
-        return {
-            'vertices': list(range(n_points)),
-            'edges': edges,
-            'triangles': triangles,
-            'distances': distances
-        }
+
     
     def compute_persistence(self, complex_data) -> List[PersistencePoint]:
         """
@@ -150,86 +100,18 @@ class TopologicalLoopDetector:
         Returns:
             List of persistence points
         """
-        if GUDHI_AVAILABLE:
-            # Use GUDHI's persistence computation
-            complex_data.compute_persistence()
-            persistence = complex_data.persistence()
-            
-            persistence_points = []
-            for dim, (birth, death) in persistence:
-                if death - birth > self.persistence_threshold:
-                    persistence_points.append(
-                        PersistencePoint(dim, birth, death)
-                    )
-            return persistence_points
-        else:
-            # Simplified persistence computation
-            return self._compute_simple_persistence(complex_data)
-    
-    def _compute_simple_persistence(self, complex_data: Dict) -> List[PersistencePoint]:
-        """
-        Simplified persistence computation using Union-Find.
+        complex_data.compute_persistence()
+        persistence = complex_data.persistence()
         
-        Args:
-            complex_data: Dictionary with complex information
-            
-        Returns:
-            List of persistence points
-        """
         persistence_points = []
-        
-        # Detect 1-dimensional features (loops)
-        loops = self._detect_loops_union_find(complex_data)
-        for birth, death in loops:
+        for dim, (birth, death) in persistence:
             if death - birth > self.persistence_threshold:
                 persistence_points.append(
-                    PersistencePoint(1, birth, death)
+                    PersistencePoint(dim, birth, death)
                 )
-        
         return persistence_points
     
-    def _detect_loops_union_find(self, complex_data: Dict) -> List[Tuple[float, float]]:
-        """
-        Detect loops using Union-Find algorithm.
-        
-        Args:
-            complex_data: Dictionary with edges and distances
-            
-        Returns:
-            List of (birth, death) pairs for loops
-        """
-        edges = sorted(complex_data['edges'], key=lambda x: x[2])
-        n_vertices = len(complex_data['vertices'])
-        
-        # Union-Find data structure
-        parent = list(range(n_vertices))
-        rank = [0] * n_vertices
-        
-        def find(x):
-            if parent[x] != x:
-                parent[x] = find(parent[x])
-            return parent[x]
-        
-        def union(x, y):
-            px, py = find(x), find(y)
-            if px == py:
-                return False
-            if rank[px] < rank[py]:
-                px, py = py, px
-            parent[py] = px
-            if rank[px] == rank[py]:
-                rank[px] += 1
-            return True
-        
-        loops = []
-        for i, j, weight in edges:
-            if find(i) == find(j):
-                # Found a loop
-                loops.append((0, weight))  # Birth at 0, death at weight
-            else:
-                union(i, j)
-        
-        return loops
+
     
     def compute_topological_signature(self, 
                                      trajectory: List[Tuple[float, float, float]],
@@ -449,7 +331,6 @@ class TopologicalLoopDetector:
             for j, (b2, d2) in enumerate(diag2_aug[:len(diagram2)]):
                 cost_matrix[i, j] = ((d2 - b2) / 2) ** p
         
-        # Use Hungarian algorithm for optimal matching
         from scipy.optimize import linear_sum_assignment
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
         
