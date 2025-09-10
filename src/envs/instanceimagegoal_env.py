@@ -24,7 +24,11 @@ class InstanceImageGoal_Env:
         self.args = args
 
         self.device = torch.device("cuda")
-        self.episode_no = -1
+        # Initialize episode_no based on start_episode if resuming
+        if hasattr(args, 'start_episode') and args.start_episode > 0:
+            self.episode_no = args.start_episode - 1  # Will be incremented on first reset
+        else:
+            self.episode_no = -1
 
         # Episode Dataset info
         self.goal_name = None
@@ -62,6 +66,7 @@ class InstanceImageGoal_Env:
             info (dict): contains timestep, pose, goal category and
                          evaluation metric info
         """
+        # Increment episode counter
         self.episode_no += 1
 
         # Initializations
@@ -70,10 +75,15 @@ class InstanceImageGoal_Env:
         self.path_length = 1e-5
         self.trajectory_states = []
 
+        # Set specific episode if episode_id is provided
         if self.args.episode_id != -1:
             if self.args.environment == 'habitat':
                 self._env.current_episode = self._env.episodes[self.args.episode_id]
-            self.episode_no = self.args.episode_id
+            # Don't override episode_no here as it should track the current episode
+        elif self.args.environment == 'habitat' and hasattr(self.args, 'start_episode') and self.args.start_episode > 0:
+            # For resuming: set the habitat environment to the correct episode
+            if self.episode_no < len(self._env.episodes):
+                self._env.current_episode = self._env.episodes[self.episode_no]
        
         obs = self._env.reset()
         self.update_after_reset()

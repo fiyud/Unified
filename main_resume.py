@@ -194,19 +194,9 @@ def main():
     BEV_map.init_map_and_pose()
     obs, rgbd, infos = agent.reset()
 
-    # Skip to the desired episode if resuming
-    current_episode = 0
-    while current_episode < args.start_episode:
-        obs, rgbd, done, infos = agent.step({'wait': True})
-        if done:
-            current_episode += 1
-            if current_episode < args.start_episode:
-                agent.reset()
-        if current_episode >= args.num_episodes:
-            finished = True
-            break
+    print(f"After reset: episode_no = {infos.get('episode_no', 'N/A')}, expected start_episode = {args.start_episode}")
 
-    if finished:
+    if args.start_episode >= args.num_episodes:
         print(f"Requested start episode {args.start_episode} exceeds total episodes {args.num_episodes}")
         return
 
